@@ -71,8 +71,11 @@ export class GoogleDriveService {
 
       // Return a direct link
       return `https://lh3.googleusercontent.com/d/${fileId}`;
-    } catch (error) {
-      this.logger.error('Error uploading to Google Drive', error);
+    } catch (error: any) {
+      this.logger.error('Error uploading to Google Drive', error.message);
+      if (error.response) {
+        this.logger.error('Google API Error Response:', error.response.data);
+      }
       throw error;
     }
   }
