@@ -16,8 +16,6 @@ export class LessonsService {
   ) {}
 
   async findAll(query?: any, user?: any): Promise<Lesson[]> {
-    console.log('[CRITICAL DEBUG] Lessons.findAll Query:', JSON.stringify(query));
-    console.log('[CRITICAL DEBUG] Lessons.findAll User:', JSON.stringify(user));
     
     const filter: any = {};
     
@@ -40,9 +38,7 @@ export class LessonsService {
       ];
     }
 
-    console.log('[CRITICAL DEBUG] Final MongoDB Lessons Filter:', JSON.stringify(filter));
     const lessons = await this.lessonModel.find(filter).exec();
-    console.log(`[CRITICAL DEBUG] Found ${lessons.length} lessons`);
     return lessons;
   }
 

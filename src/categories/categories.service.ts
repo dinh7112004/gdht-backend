@@ -16,7 +16,6 @@ export class CategoriesService {
   ) {}
 
   async findAll(user?: any): Promise<any[]> {
-    console.log('[CRITICAL DEBUG] User from Request:', JSON.stringify(user));
     
     const filter: any = {};
     const role = user?.role?.toUpperCase();
@@ -39,9 +38,7 @@ export class CategoriesService {
       }
     }
     
-    console.log('[CRITICAL DEBUG] Final Filter to MongoDB:', JSON.stringify(filter));
     const results = await this.categoryModel.find(filter).sort({ order: 1 }).exec();
-    console.log(`[CRITICAL DEBUG] Database returned ${results.length} items`);
     return results;
   }
 
