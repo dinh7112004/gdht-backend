@@ -8,9 +8,25 @@ export class ClassesController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get('teacher/stats')
-  async getTeacherStats(@Request() req) {
+  async getTeacherStats(@Request() req: any) {
     const teacherId = req.user.userId || req.user.sub || req.user._id || req.user.id;
     return this.classesService.getTeacherStats(teacherId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-classes')
+  async getMyClasses(@Request() req: any) {
+    const userId = req.user.userId || req.user.sub || req.user._id || req.user.id;
+    const role = req.user.role;
+
+    if (role === 'ADMIN' || role === 'admin') {
+      return this.classesService.findAll();
+    }
+    
+    if (role === 'TEACHER' || role === 'teacher') {
+      return this.classesService.findByTeacher(userId);
+    }
+    return this.classesService.findByStudent(userId);
   }
 
   @UseGuards(AuthGuard('jwt'))
@@ -26,17 +42,6 @@ export class ClassesController {
     return this.classesService.joinClass(code, userId, req.user.role);
   }
 
-  @UseGuards(AuthGuard('jwt'))
-  @Get('my-classes')
-  async getMyClasses(@Request() req) {
-    const userId = req.user.userId || req.user.sub || req.user._id || req.user.id;
-    const role = req.user.role;
-    
-    if (role === 'TEACHER' || role === 'ADMIN') {
-      return this.classesService.findByTeacher(userId);
-    }
-    return this.classesService.findByStudent(userId);
-  }
 
   @UseGuards(AuthGuard('jwt'))
   @Post()

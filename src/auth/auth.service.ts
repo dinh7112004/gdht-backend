@@ -49,16 +49,23 @@ export class AuthService {
 
   async login(loginDto: any) {
     const { email, password } = loginDto;
+    console.log(`[DEBUG] Login attempt for: ${email}`);
     
     const user = await this.userModel.findOne({ email });
     if (!user) {
+      console.log(`[DEBUG] User NOT found for email: ${email}`);
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
 
+    console.log(`[DEBUG] User found: ${user.fullName} (${user.role})`);
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      console.log(`[DEBUG] Password MISMATCH for user: ${email}`);
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
+
+    console.log(`[DEBUG] Login SUCCESS for: ${email}`);
 
     const payload = { sub: user._id, email: user.email, role: user.role };
     

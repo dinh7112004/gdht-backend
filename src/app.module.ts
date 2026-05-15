@@ -16,6 +16,7 @@ import { AchievementsModule } from './achievements/achievements.module';
 import { ItemsModule } from './items/items.module';
 import { MissionsModule } from './missions/missions.module';
 import { UploadModule } from './upload/upload.module';
+import { SubjectsModule } from './subjects/subjects.module';
 
 import { StatsModule } from './stats/stats.module';
 
@@ -42,6 +43,7 @@ import { StatsModule } from './stats/stats.module';
     MissionsModule,
     StatsModule,
     UploadModule,
+    SubjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

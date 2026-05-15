@@ -16,6 +16,7 @@ export class ClassesService {
   ) {}
 
   async findByTeacher(teacherId: string): Promise<Class[]> {
+    if (!teacherId || !Types.ObjectId.isValid(teacherId)) return [];
     const tId = typeof teacherId === 'string' ? new Types.ObjectId(teacherId) : teacherId;
     return this.classModel.find({ 
       $or: [
@@ -31,6 +32,7 @@ export class ClassesService {
   }
 
   async findByStudent(studentId: string): Promise<Class[]> {
+    if (!studentId || !Types.ObjectId.isValid(studentId)) return [];
     const sId = typeof studentId === 'string' ? new Types.ObjectId(studentId) : studentId;
     return this.classModel.find({ studentIds: sId })
       .populate('teacherId', 'name')
@@ -176,19 +178,41 @@ export class ClassesService {
   }
 
   async assignLessons(classId: string, lessonIds: string[]) {
-    return this.classModel.findByIdAndUpdate(
+    // 1. Cập nhật phía Lớp học
+    const updatedClass = await this.classModel.findByIdAndUpdate(
       classId,
       { $addToSet: { assignedLessons: { $each: lessonIds.map(id => new Types.ObjectId(id)) } } },
       { new: true }
     ).exec();
+
+    // 2. Cập nhật phía Bài học (Đồng bộ targetClassIds)
+    if (lessonIds.length > 0) {
+      await this.lessonModel.updateMany(
+        { _id: { $in: lessonIds.map(id => new Types.ObjectId(id)) } },
+        { $addToSet: { targetClassIds: new Types.ObjectId(classId) } }
+      ).exec();
+    }
+
+    return updatedClass;
   }
 
   async assignCategories(classId: string, categoryIds: string[]) {
-    return this.classModel.findByIdAndUpdate(
+    // 1. Cập nhật phía Lớp học
+    const updatedClass = await this.classModel.findByIdAndUpdate(
       classId,
       { $addToSet: { assignedCategories: { $each: categoryIds.map(id => new Types.ObjectId(id)) } } },
       { new: true }
     ).exec();
+
+    // 2. Cập nhật phía Chủ đề (Đồng bộ targetClassIds)
+    if (categoryIds.length > 0) {
+      await this.categoryModel.updateMany(
+        { _id: { $in: categoryIds.map(id => new Types.ObjectId(id)) } },
+        { $addToSet: { targetClassIds: new Types.ObjectId(classId) } }
+      ).exec();
+    }
+
+    return updatedClass;
   }
 
   async addCoTeacher(classId: string, teacherId: string) {

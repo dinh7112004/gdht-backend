@@ -102,19 +102,44 @@ export class CategoriesService {
           { targetClassIds: { $in: studentClassIds } },
           { _id: { $in: assignedLsnIds } }
         ]
-      }).select('category').exec();
+      }).select('category categoryId').exec();
       const categoryNamesFromLessons = lessonsInClass.map(l => l.category).filter(name => !!name);
+      const categoryIdsFromLessons = lessonsInClass.map(l => l.categoryId).filter(id => !!id);
 
       filter = {
-        $or: [
-          { _id: { $in: assignedCatIds } },
-          { name: { $in: categoryNamesFromLessons } },
-          { targetClassIds: { $in: studentClassIds } }
+        $and: [
+          {
+            $or: [
+              { _id: { $in: [...assignedCatIds, ...categoryIdsFromLessons] } },
+              { name: { $in: categoryNamesFromLessons } },
+              { targetClassIds: { $in: studentClassIds } },
+              { isSystem: true },
+              { isPublic: true }
+            ]
+          }
         ]
       };
+
+      // Handle search/subject query
+      if (query && query.search) {
+        const searchRegex = new RegExp(query.search, 'i');
+        filter.$and.push({
+          $or: [
+            { name: { $regex: searchRegex } },
+            { subject: { $regex: searchRegex } },
+            { description: { $regex: searchRegex } }
+          ]
+        });
+      }
     } else {
-      // NẾU CHƯA VÀO LỚP: Không hiện gì (Chế độ Strict Isolation)
-      filter = { _id: { $in: [] } };
+      // NẾU CHƯA VÀO LỚP: Chỉ hiện các chủ đề hệ thống/công khai (tùy chính sách cách ly)
+      // Ở đây ta giữ chế độ Strict: Chỉ hiện nếu có lớp, hoặc hiện System nếu muốn
+      filter = { 
+        $or: [
+          { isSystem: true },
+          { isPublic: true }
+        ]
+      };
     }
 
     const categories = await this.categoryModel.find(filter).populate('targetClassIds', 'name').sort({ order: 1 }).exec();
@@ -169,13 +194,14 @@ export class CategoriesService {
     }
 
     const filter: any = {
-      targetClassIds: { $in: finalClassIds }
+      isFeatured: true,
+      $or: [
+        { isPublic: true },
+        { isSystem: true },
+        { targetClassIds: { $in: finalClassIds } }
+      ]
     };
     
-    // Nếu không có lớp nào, không hiện gì cả
-    if (finalClassIds.length === 0) {
-      return [];
-    }
     return this.categoryModel.find(filter).populate('targetClassIds', 'name').sort({ order: 1 }).exec();
   }
 
@@ -188,16 +214,43 @@ export class CategoriesService {
 
   async create(data: any, user?: any): Promise<CategoryDocument> {
     const cleanedData = this.cleanImageUrl(data);
+    let teacherClassIds: string[] = [];
+
     if (user) {
       cleanedData.creatorId = user.userId || user.sub || user._id;
       // Nếu là giáo viên thì mặc định KHÔNG PHẢI là hệ thống và KHÔNG CÔNG KHAI
       if (user.role === 'TEACHER' || user.role === 'teacher') {
         cleanedData.isSystem = false;
         cleanedData.isPublic = data.isPublic || false;
+
+        // TỰ ĐỘNG LẤY TẤT CẢ LỚP CỦA GIÁO VIÊN NÀY
+        const ClassesModel = this.userModel.db.model('Class');
+        const teacherClasses = await ClassesModel.find({
+          $or: [
+            { teacherId: cleanedData.creatorId },
+            { coTeacherIds: cleanedData.creatorId }
+          ]
+        }).select('_id').exec();
+        
+        teacherClassIds = teacherClasses.map(c => c._id.toString());
+        if (!cleanedData.targetClassIds || cleanedData.targetClassIds.length === 0) {
+          cleanedData.targetClassIds = teacherClassIds;
+        }
       }
     }
+
     const newCategory = new this.categoryModel(cleanedData);
     const saved = await newCategory.save();
+
+    // ĐỒNG BỘ NGƯỢC LẠI: Cập nhật danh sách chủ đề của các lớp
+    if (teacherClassIds.length > 0) {
+      const ClassesModel = this.userModel.db.model('Class');
+      await ClassesModel.updateMany(
+        { _id: { $in: teacherClassIds.map(id => new Types.ObjectId(id)) } },
+        { $addToSet: { assignedCategories: saved._id } }
+      ).exec();
+    }
+
     this.eventsGateway.emitDataChange('categoryUpdated', saved);
     return saved;
   }
@@ -216,6 +269,15 @@ export class CategoriesService {
 
     const cleanedData = this.cleanImageUrl(data);
     const updated = await this.categoryModel.findByIdAndUpdate(id, cleanedData, { new: true }).exec();
+    
+    // Nếu đổi tên chủ đề, cần cập nhật lại tên category trong tất cả bài học liên quan
+    if (updated && data.name && data.name !== category.name) {
+      await this.lessonModel.updateMany(
+        { $or: [{ categoryId: id }, { category: category.name }] },
+        { category: data.name, categoryId: id }
+      ).exec();
+    }
+
     this.eventsGateway.emitDataChange('categoryUpdated', updated);
     return updated;
   }

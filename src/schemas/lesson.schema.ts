@@ -12,7 +12,10 @@ export class Lesson {
   description: string;
 
   @Prop({ required: true })
-  category: string; // Ca dao, Truyện Kiều, Lễ hội, Danh nhân
+  category: string; // Tên chủ đề (để hiển thị nhanh)
+
+  @Prop({ type: 'ObjectId', ref: 'Category' })
+  categoryId: any; // ID của chủ đề (để query chính xác)
 
   @Prop({ default: 'Toán học' })
   subject: string; // Toán học, Ngữ văn, Lịch sử, Địa lý...

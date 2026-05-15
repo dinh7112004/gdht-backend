@@ -25,10 +25,34 @@ export class UsersService {
     return this.userModel.find({ role }).select('-password').exec();
   }
 
+  async create(data: any): Promise<User> {
+    const { email, password, fullName, role } = data;
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password || '123456', 10);
+    
+    const user = new this.userModel({
+      email,
+      password: hashedPassword,
+      fullName,
+      role: role || 'STUDENT',
+      xp: 0,
+      level: 1,
+      gems: 0,
+      streak: 0
+    });
+    
+    return user.save();
+  }
+
   async update(id: string, data: any): Promise<User | null> {
     if (!isValidObjectId(id)) return null;
-    // Không cho phép cập nhật tên qua API này để bắt buộc dùng thẻ đổi tên
-    const { fullName, ...updateData } = data;
+    
+    // For admin/management purposes, we allow updating everything provided
+    const updateData = { ...data };
+    if (data.password) {
+      const bcrypt = require('bcrypt');
+      updateData.password = await bcrypt.hash(data.password, 10);
+    }
     
     return this.userModel.findByIdAndUpdate(id, updateData, { new: true })
       .select('-password')
@@ -36,6 +60,11 @@ export class UsersService {
       .populate('equippedItems.avatarId')
       .populate('equippedItems.frameId')
       .exec();
+  }
+
+  async delete(id: string): Promise<any> {
+    if (!isValidObjectId(id)) return null;
+    return this.userModel.findByIdAndDelete(id).exec();
   }
 
   async findOne(id: string): Promise<User | null> {

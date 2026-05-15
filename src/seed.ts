@@ -210,6 +210,7 @@ async function bootstrap() {
   await classModel.create([
     {
       name: 'Lớp 5A',
+      code: 'CLASS5A',
       teacherId: teacherId,
       studentIds: [studentId],
       averageProgress: 78,

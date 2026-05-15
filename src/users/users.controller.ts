@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Post, Request, Query, Inject, forwardRef } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, Post, Request, Query, Inject, forwardRef, Delete } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import { ClassesService } from '../classes/classes.service';
@@ -58,6 +58,11 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Post()
+  async create(@Body() data: any) {
+    return this.usersService.create(data);
+  }
+
   @Get('students')
   async findAllStudents() {
     return this.usersService.findByRole('STUDENT');
@@ -85,6 +90,11 @@ export class UsersController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() data: any) {
     return this.usersService.update(id, data);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    return this.usersService.delete(id);
   }
 
   @Post('complete-lesson/:lessonId')
@@ -118,7 +128,20 @@ export class UsersController {
   }
   @Get('360/:id')
   async getStudent360(@Param('id') id: string) {
-    return this.usersService.getStudent360(id);
+    const student360 = await this.usersService.getStudent360(id);
+    if (!student360) return null;
+
+    // Fetch class info
+    const classes = await this.classesService.findByStudent(id);
+    const className = classes && classes.length > 0 ? classes[0].name : "Chưa vào lớp học";
+
+    return {
+      ...student360,
+      user: {
+        ...student360.user,
+        className
+      }
+    };
   }
 
   @Post('toggle-save/:postId')

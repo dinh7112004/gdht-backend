@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, isValidObjectId, Types } from 'mongoose';
 import { Lesson, LessonDocument } from '../schemas/lesson.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
+import { User, UserDocument } from '../schemas/user.schema';
 import { EventsGateway } from '../events/events.gateway';
 
 @Injectable()
@@ -10,32 +11,39 @@ export class LessonsService {
   constructor(
     @InjectModel(Lesson.name) private lessonModel: Model<LessonDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private eventsGateway: EventsGateway
   ) {}
 
   async findAll(query?: any, user?: any): Promise<Lesson[]> {
+    console.log('[CRITICAL DEBUG] Lessons.findAll Query:', JSON.stringify(query));
+    console.log('[CRITICAL DEBUG] Lessons.findAll User:', JSON.stringify(user));
+    
     const filter: any = {};
     
-    // Nếu không phải ADMIN thì BẮT BUỘC phải có creatorId
-    if (user && user.role !== 'ADMIN') {
-      const userId = user.userId || user.sub || user._id || user.id;
-      if (userId) {
-        filter.creatorId = userId;
-      } else {
-        return []; // Bảo mật: Không có ID thì không hiện gì
-      }
+    // Tìm theo Category (Ưu tiên ID, fallback sang Tên)
+    if (query?.categoryId) {
+      filter.$or = [
+        { categoryId: query.categoryId },
+        { category: query.category }
+      ];
+    } else if (query?.category) {
+      const categoryRegex = new RegExp(`^${query.category.trim()}$`, 'i');
+      filter.category = { $regex: categoryRegex };
     }
 
-    if (query?.category) filter.category = query.category;
-    if (query?.categoryId) filter.categoryId = query.categoryId;
     if (query?.search) {
       filter.$or = [
+        ...(filter.$or || []),
         { title: { $regex: query.search, $options: 'i' } },
-        { category: { $regex: query.search, $options: 'i' } }
+        { content: { $regex: query.search, $options: 'i' } }
       ];
     }
-    console.log('[DEBUG] Lessons Filter:', JSON.stringify(filter));
-    return this.lessonModel.find(filter).exec();
+
+    console.log('[CRITICAL DEBUG] Final MongoDB Lessons Filter:', JSON.stringify(filter));
+    const lessons = await this.lessonModel.find(filter).exec();
+    console.log(`[CRITICAL DEBUG] Found ${lessons.length} lessons`);
+    return lessons;
   }
 
   async findForStudent(classIds: any[], assignedLessonIds: any[], assignedCategoryIds: any[], query?: any): Promise<Lesson[]> {
@@ -54,13 +62,13 @@ export class LessonsService {
         ]
       }).exec();
       const categoryNames = assignedCategories.map(c => c.name);
+      const categoryIds = assignedCategories.map(c => c._id);
 
-      // 2. CHỈ hiện bài của lớp mình + bài được giao riêng + bài thuộc category của lớp
+      // 2. CHỈ hiện bài của lớp mình + bài được giao riêng
       filter = {
         $or: [
           { targetClassIds: { $in: studentClassIds } },
-          { _id: { $in: assignedLsnIds } },
-          { category: { $in: categoryNames } }
+          { _id: { $in: assignedLsnIds } }
         ]
       };
     } else {
@@ -68,15 +76,41 @@ export class LessonsService {
       filter = { _id: { $in: [] } };
     }
 
-    if (query?.category && query.category !== 'Tất cả bài học' && query.category !== 'All Lessons') {
-      const categoryRegex = new RegExp(`^${query.category.trim()}$`, 'i');
-      // Nếu có query category: Phải thỏa mãn điều kiện bảo mật VÀ phải khớp đúng category
-      filter = {
-        $and: [
-          filter, 
-          { category: { $regex: categoryRegex } }
+    // NẾU có query theo Category: Cho phép xem bài thuộc category đó NẾU category đó đã được giao cho lớp
+    if ((query?.category && query.category !== 'Tất cả bài học' && query.category !== 'All Lessons') || query?.categoryId) {
+      const assignedCategories = await this.categoryModel.find({
+        $or: [
+          { targetClassIds: { $in: studentClassIds } },
+          { _id: { $in: assignedCatIds } }
         ]
-      };
+      }).exec();
+      const categoryNames = assignedCategories.map(c => c.name);
+      const categoryIds = assignedCategories.map(c => c._id);
+
+      const categoryMatch: any = {};
+      const categoryName = query.category?.trim();
+      const categoryRegex = new RegExp(`^${categoryName}$`, 'i');
+
+      categoryMatch.$or = [
+        { categoryId: query.categoryId },
+        { category: { $regex: categoryRegex } },
+        { subject: { $regex: categoryRegex } },
+        { title: { $regex: categoryRegex } }
+      ];
+      
+      // Kiểm tra xem category này có nằm trong danh sách được giao không
+      const isCategoryAssigned = assignedCatIds.some(id => id.toString() === query.categoryId) || 
+                               categoryNames.some(name => name.toLowerCase() === query.category?.toLowerCase());
+
+      if (isCategoryAssigned) {
+        // Nếu chủ đề này được giao -> Cho phép xem tất cả bài trong chủ đề này
+        filter = categoryMatch;
+      } else {
+        // Nếu chủ đề này không được giao -> Chỉ xem được những bài lẻ được giao trong chủ đề này
+        filter = {
+          $and: [filter, categoryMatch]
+        };
+      }
     }
 
     console.log('[DEBUG] findForStudent Filter:', JSON.stringify(filter, null, 2));
@@ -99,16 +133,45 @@ export class LessonsService {
 
   async create(data: any, user?: any): Promise<LessonDocument> {
     const cleanedData = this.cleanImageUrl(data);
+    let teacherClassIds: string[] = [];
+
     if (user) {
       cleanedData.creatorId = user.userId || user.sub || user._id;
       // Nếu là giáo viên thì bài giảng KHÔNG phải hệ thống và mặc định riêng tư
       if (user.role === 'TEACHER' || user.role === 'teacher') {
         cleanedData.isSystem = false;
         cleanedData.isPublic = data.isPublic || false;
+
+        // TỰ ĐỘNG LẤY TẤT CẢ LỚP CỦA GIÁO VIÊN NÀY
+        // (Sử dụng Model trực tiếp để tránh vòng lặp dependency nếu inject ClassesService)
+        const ClassesModel = this.userModel.db.model('Class');
+        const teacherClasses = await ClassesModel.find({
+          $or: [
+            { teacherId: cleanedData.creatorId },
+            { coTeacherIds: cleanedData.creatorId }
+          ]
+        }).select('_id').exec();
+        
+        teacherClassIds = teacherClasses.map(c => c._id.toString());
+        // Nếu user không chọn lớp cụ thể, tự động gán tất cả lớp của họ
+        if (!cleanedData.targetClassIds || cleanedData.targetClassIds.length === 0) {
+          cleanedData.targetClassIds = teacherClassIds;
+        }
       }
     }
+    
     const newLesson = new this.lessonModel(cleanedData);
     const saved = await newLesson.save();
+
+    // ĐỒNG BỘ NGƯỢC LẠI: Cập nhật danh sách bài giảng của các lớp
+    if (teacherClassIds.length > 0) {
+      const ClassesModel = this.userModel.db.model('Class');
+      await ClassesModel.updateMany(
+        { _id: { $in: teacherClassIds.map(id => new Types.ObjectId(id)) } },
+        { $addToSet: { assignedLessons: saved._id } }
+      ).exec();
+    }
+
     this.eventsGateway.emitDataChange('lessonUpdated', saved);
     return saved;
   }
