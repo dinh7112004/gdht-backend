@@ -57,7 +57,8 @@ async function bootstrap() {
       imageUrl: 'https://cdn-icons-png.flaticon.com/512/3112/3112946.png',
       category: 'BOOST',
       price: 200,
-      color: '#3B82F6'
+      color: '#3B82F6',
+      code: 'DOUBLE_XP'
     },
     {
       name: 'Gợi ý',
@@ -65,7 +66,8 @@ async function bootstrap() {
       imageUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
       category: 'BOOST',
       price: 50,
-      color: '#F59E0B'
+      color: '#F59E0B',
+      code: 'HINT'
     },
     {
       name: 'Bảo vệ',
@@ -73,7 +75,8 @@ async function bootstrap() {
       imageUrl: 'https://cdn-icons-png.flaticon.com/512/610/610333.png',
       category: 'BOOST',
       price: 150,
-      color: '#10B981'
+      color: '#10B981',
+      code: 'STREAK_FREEZE'
     },
     {
       name: 'Đổi tên',
@@ -81,7 +84,8 @@ async function bootstrap() {
       imageUrl: 'https://cdn-icons-png.flaticon.com/512/10433/10433048.png',
       category: 'OTHER',
       price: 500,
-      color: '#EF4444'
+      color: '#EF4444',
+      code: 'RENAME_CARD'
     }
   ]);
 

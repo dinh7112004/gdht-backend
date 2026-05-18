@@ -105,6 +105,15 @@ export class User {
   @Prop({ default: 0 })
   renameCount: number;
 
+  @Prop({ type: Date })
+  doubleXpUntil?: Date;
+
+  @Prop({ type: Boolean, default: false })
+  streakFreezeActive?: boolean;
+
+  @Prop({ type: Number, default: 0 })
+  hintsCount?: number;
+
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Post' }], default: [] })
   savedPosts: Types.ObjectId[];
 }

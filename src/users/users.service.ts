@@ -86,7 +86,13 @@ export class UsersService {
     const numQuizXpReward = Number(xpReward) || 0; // Điểm từ Quiz (câu hỏi)
 
     // Tổng XP = Điểm bài học + Điểm Quiz
-    const totalXpGained = lessonXpReward + numQuizXpReward;
+    let totalXpGained = lessonXpReward + numQuizXpReward;
+
+    // Áp dụng nhân đôi XP nếu thẻ Double XP đang còn hiệu lực
+    const isDoubleXpActive = user.doubleXpUntil && new Date(user.doubleXpUntil).getTime() > Date.now();
+    if (isDoubleXpActive) {
+      totalXpGained = totalXpGained * 2;
+    }
 
     // Thưởng Gems: Đúng hết được 2, làm xong được 1
     const gemReward = (numScore === numTotal && numTotal > 0) ? 2 : 1;

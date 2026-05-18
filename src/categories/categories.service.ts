@@ -185,7 +185,7 @@ export class CategoriesService {
   async findFeatured(userClassIds?: any[], userId?: string): Promise<CategoryDocument[]> {
     let finalClassIds = userClassIds || [];
     
-    if (userId && finalClassIds.length === 0) {
+    if (userId && Types.ObjectId.isValid(userId) && finalClassIds.length === 0) {
       const studentClasses = await this.userModel.db.model('Class').find({ studentIds: userId }).exec();
       finalClassIds = studentClasses.map(c => c._id);
     }

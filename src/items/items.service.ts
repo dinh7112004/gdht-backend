@@ -97,17 +97,20 @@ export class ItemsService {
         message = user.equippedItems.frameId ? `Đã trang bị ${item.name}` : `Đã tháo ${item.name}`;
         break;
       case 'BOOST':
-        if (item.name.includes('XP')) {
-          message = 'Đã kích hoạt Nhân đôi XP!';
-        } else if (item.name.includes('Bảo vệ')) {
+        if (item.code === 'DOUBLE_XP' || item.name.includes('XP')) {
+          user.doubleXpUntil = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+          message = 'Đã kích hoạt Nhân đôi XP trong 1 giờ!';
+        } else if (item.code === 'STREAK_FREEZE' || item.name.includes('Bảo vệ')) {
+          user.streakFreezeActive = true;
           message = 'Đã kích hoạt Khiên bảo vệ chuỗi học tập!';
         } else if (item.name.includes('Gợi ý')) {
-          message = 'Bạn nhận được thêm 3 gợi ý cho bài tập!';
+          user.hintsCount = (user.hintsCount || 0) + 3;
+          message = 'Đã nhận được thêm 3 gợi ý cho bài tập!';
         }
         break;
       case 'OTHER':
-        if (item.name.includes('Đổi tên')) {
-          message = 'Mời bạn nhập tên mới trong phần cài đặt.';
+        if (item.code === 'RENAME_CARD' || item.name.includes('Đổi tên')) {
+          message = 'Mời bạn quay lại trang cá nhân để thực hiện đổi tên mới.';
         }
         break;
       default:
