@@ -40,9 +40,9 @@ export class AuthService {
   }
 
   /**
-   * Social login — verify token with Google or Facebook, then find/create user
+   * Social login — verify token with Google, Facebook, or Apple, then find/create user
    */
-  async socialLogin(provider: 'google' | 'facebook', token: string, role = 'STUDENT') {
+  async socialLogin(provider: 'google' | 'facebook' | 'apple', token: string, role = 'STUDENT') {
     let email: string;
     let fullName: string;
     let avatar: string | undefined;
@@ -56,7 +56,7 @@ export class AuthService {
       email = data.email;
       fullName = data.name ?? email.split('@')[0];
       avatar = data.picture;
-    } else {
+    } else if (provider === 'facebook') {
       // Verify Facebook access token
       const res = await fetch(`https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${token}`);
       if (!res.ok) throw new UnauthorizedException('Facebook token không hợp lệ');
@@ -65,6 +65,14 @@ export class AuthService {
       email = data.email;
       fullName = data.name ?? email.split('@')[0];
       avatar = data.picture?.data?.url;
+    } else if (provider === 'apple') {
+      // Decode Apple identity token
+      const decoded = this.jwtService.decode(token) as { email?: string };
+      if (!decoded || !decoded.email) throw new UnauthorizedException('Apple token không hợp lệ');
+      email = decoded.email;
+      fullName = email.split('@')[0]; // Apple only provides name on first login via frontend
+    } else {
+      throw new UnauthorizedException('Provider không được hỗ trợ');
     }
 
     // Find or create user

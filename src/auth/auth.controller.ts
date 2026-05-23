@@ -32,7 +32,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('social')
-  async socialLogin(@Body() body: { provider: 'google' | 'facebook'; token: string; role?: string }) {
+  async socialLogin(@Body() body: { provider: 'google' | 'facebook' | 'apple'; token: string; role?: string }) {
     return this.authService.socialLogin(body.provider, body.token, body.role ?? 'STUDENT');
   }
 
