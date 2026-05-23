@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, isValidObjectId } from 'mongoose';
 import { User, UserDocument } from '../schemas/user.schema';
@@ -6,6 +6,7 @@ import { Lesson, LessonDocument } from '../schemas/lesson.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
 import { Achievement, AchievementDocument } from '../schemas/achievement.schema';
 import { EventsGateway } from '../events/events.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
@@ -14,11 +15,17 @@ export class UsersService {
     @InjectModel(Lesson.name) private lessonModel: Model<LessonDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
     @InjectModel(Achievement.name) private achievementModel: Model<AchievementDocument>,
-    private eventsGateway: EventsGateway
+    private eventsGateway: EventsGateway,
+    @Inject(forwardRef(() => NotificationsService))
+    private notificationsService: NotificationsService,
   ) {}
 
   async findAll(): Promise<User[]> {
     return this.userModel.find().select('-password').sort({ createdAt: -1 }).exec();
+  }
+
+  async findByEmail(email: string) {
+    return this.userModel.findOne({ email }).exec();
   }
 
   async findByRole(role: string): Promise<User[]> {
@@ -29,7 +36,7 @@ export class UsersService {
     const { email, password, fullName, role } = data;
     const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password || '123456', 10);
-    
+
     const user = new this.userModel({
       email,
       password: hashedPassword,
@@ -40,8 +47,19 @@ export class UsersService {
       gems: 0,
       streak: 0
     });
-    
-    return user.save();
+
+    const saved = await user.save();
+
+    // Notify admins about new user registration
+    const roleLabel = role === 'TEACHER' ? 'Giáo viên' : 'Học sinh';
+    void this.notificationsService.notifyAdmins(
+      `👤 ${roleLabel} mới đăng ký`,
+      `${fullName ?? email} vừa tạo tài khoản ${roleLabel.toLowerCase()} trên hệ thống`,
+      'general',
+      { userId: (saved as any)._id?.toString() },
+    );
+
+    return saved;
   }
 
   async update(id: string, data: any): Promise<User | null> {

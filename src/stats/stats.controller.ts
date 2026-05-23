@@ -11,7 +11,7 @@ export class StatsController {
   }
 
   @Get('reports')
-  async getReports() {
-    return this.statsService.getReportsStats();
+  async getReports(@Query('period') period: string) {
+    return this.statsService.getReportsStats(period);
   }
 }

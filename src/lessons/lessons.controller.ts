@@ -26,7 +26,8 @@ export class LessonsController {
     // Thu thập tất cả các bài giảng và chủ đề được gán trực tiếp cho lớp
     const assignedLessonIds: any[] = [];
     const assignedCategoryIds: any[] = [];
-    
+    const excludedLessonIds: any[] = [];
+
     myClasses.forEach(c => {
       const cls = c as any;
       if (cls.assignedLessons && Array.isArray(cls.assignedLessons)) {
@@ -35,9 +36,18 @@ export class LessonsController {
       if (cls.assignedCategories && Array.isArray(cls.assignedCategories)) {
         cls.assignedCategories.forEach(cId => assignedCategoryIds.push(cId));
       }
+      if (cls.excludedLessons && Array.isArray(cls.excludedLessons)) {
+        cls.excludedLessons.forEach(lId => excludedLessonIds.push(lId));
+      }
     });
-    
-    return this.lessonsService.findForStudent(classIds, assignedLessonIds, assignedCategoryIds, query);
+
+    return this.lessonsService.findForStudent(classIds, assignedLessonIds, assignedCategoryIds, query, excludedLessonIds);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('sync-class-assignments')
+  async syncClassAssignments(@Request() req: any) {
+    return this.lessonsService.syncAllLessonsToClasses();
   }
 
   @Get(':id')

@@ -14,6 +14,9 @@ export class User {
   @Prop({ required: true })
   fullName: string;
 
+  @Prop()
+  phone?: string;
+
   @Prop({ default: 'STUDENT' })
   role: string; // STUDENT, TEACHER, PARENT, ADMIN
 
@@ -116,6 +119,9 @@ export class User {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Post' }], default: [] })
   savedPosts: Types.ObjectId[];
+
+  @Prop({ type: [String], default: [] })
+  pushTokens: string[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

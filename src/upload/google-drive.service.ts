@@ -69,7 +69,7 @@ export class GoogleDriveService {
         },
       });
 
-      // Return a direct link
+      // Use thumbnail URL — works in both browser and mobile
       return `https://lh3.googleusercontent.com/d/${fileId}`;
     } catch (error: any) {
       this.logger.error('Error uploading to Google Drive', error.message);

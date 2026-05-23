@@ -31,6 +31,9 @@ export class Class {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Category' }], default: [] })
   assignedCategories: Types.ObjectId[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Lesson' }], default: [] })
+  excludedLessons: Types.ObjectId[];
 }
 
 export const ClassSchema = SchemaFactory.createForClass(Class);

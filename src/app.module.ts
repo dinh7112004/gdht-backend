@@ -19,17 +19,19 @@ import { UploadModule } from './upload/upload.module';
 import { SubjectsModule } from './subjects/subjects.module';
 
 import { StatsModule } from './stats/stats.module';
+import { ChatModule } from './chat/chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ContentReportsModule } from './content-reports/content-reports.module';
 
-// Triggering restart to ensure PostsModule is loaded
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb://localhost:27017/gdht'),
-    MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
-    ]),
+    MongooseModule.forRoot(
+      process.env.MONGODB_URI || 'mongodb://localhost:27017/gdht',
+    ),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     LessonsModule,
     QuizzesModule,
     AuthModule,
@@ -44,6 +46,9 @@ import { StatsModule } from './stats/stats.module';
     StatsModule,
     UploadModule,
     SubjectsModule,
+    ChatModule,
+    NotificationsModule,
+    ContentReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

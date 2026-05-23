@@ -6,6 +6,7 @@ import { Class, ClassSchema } from '../schemas/class.schema';
 import { Lesson, LessonSchema } from '../schemas/lesson.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
 import { User, UserSchema } from '../schemas/user.schema';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { User, UserSchema } from '../schemas/user.schema';
       { name: Category.name, schema: CategorySchema },
       { name: User.name, schema: UserSchema },
     ]),
+    NotificationsModule,
   ],
   controllers: [ClassesController],
   providers: [ClassesService],

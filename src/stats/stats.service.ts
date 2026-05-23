@@ -13,12 +13,14 @@ export class StatsService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
   ) {}
 
-  async getReportsStats() {
+  async getReportsStats(period: string = '24H') {
     const totalStudents = await this.userModel.countDocuments({ role: 'STUDENT' });
     const students = await this.userModel.find({ role: 'STUDENT' });
 
     const radarData = await this.calculateRadarData();
-    const hourlyActivity = await this.calculateHourlyActivity();
+    const activityData = period === '7D'
+      ? await this.calculateDailyActivity()
+      : await this.calculateHourlyActivity();
 
     const activeLast7Days = await this.userModel.countDocuments({
       role: 'STUDENT',
@@ -27,17 +29,68 @@ export class StatsService {
     const retentionRate = totalStudents > 0 ? (activeLast7Days / totalStudents) * 100 : 0;
 
     const totalXp = students.reduce((acc, user) => acc + (user.xp || 0), 0);
-    const avgStudyTime = 25.5; 
+
+    // Tính avgStudyTime từ estimatedMinutes của các bài học đã hoàn thành
+    const studyTimeAgg = await this.userModel.aggregate([
+      { $unwind: '$completedLessons' },
+      {
+        $lookup: {
+          from: 'lessons',
+          let: { lessonId: { $toObjectId: '$completedLessons.lessonId' } },
+          pipeline: [{ $match: { $expr: { $eq: ['$_id', '$$lessonId'] } } }],
+          as: 'lessonDetail',
+        },
+      },
+      { $unwind: { path: '$lessonDetail', preserveNullAndEmptyArrays: false } },
+      {
+        $group: {
+          _id: null,
+          totalMinutes: { $sum: '$lessonDetail.estimatedMinutes' },
+          totalCompletions: { $sum: 1 },
+        },
+      },
+    ]);
+    const avgStudyTime =
+      studyTimeAgg.length > 0 && studyTimeAgg[0].totalCompletions > 0
+        ? Math.round(studyTimeAgg[0].totalMinutes / studyTimeAgg[0].totalCompletions)
+        : 0;
+
+    // Tính xpGrowth: so sánh XP kiếm được 7 ngày gần nhất vs 7 ngày trước đó
+    const now = new Date();
+    const last7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const prev7 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    const recentXpAgg = await this.userModel.aggregate([
+      { $unwind: '$completedLessons' },
+      { $match: { 'completedLessons.completedAt': { $gte: last7 } } },
+      { $group: { _id: null, total: { $sum: '$completedLessons.xpGained' } } },
+    ]);
+    const prevXpAgg = await this.userModel.aggregate([
+      { $unwind: '$completedLessons' },
+      { $match: { 'completedLessons.completedAt': { $gte: prev7, $lt: last7 } } },
+      { $group: { _id: null, total: { $sum: '$completedLessons.xpGained' } } },
+    ]);
+
+    const recentXp = recentXpAgg[0]?.total || 0;
+    const prevXp = prevXpAgg[0]?.total || 0;
+    let xpGrowth = '0%';
+    if (prevXp > 0) {
+      const pct = ((recentXp - prevXp) / prevXp) * 100;
+      xpGrowth = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    } else if (recentXp > 0) {
+      xpGrowth = '+100%';
+    }
 
     return {
       radarData,
-      hourlyActivity,
+      activityData,
+      period,
       kpis: {
         retentionRate,
         avgStudyTime,
         totalXp,
-        xpGrowth: "+12.5%"
-      }
+        xpGrowth,
+      },
     };
   }
 
@@ -71,9 +124,9 @@ export class StatsService {
       const match = stats.find(s => s._id === cat);
       return {
         subject: cat,
-        A: match ? Math.round(match.avgScore * 150) : 60 + Math.random() * 20,
+        A: match ? Math.round(match.avgScore * 150) : 0,
         B: 120,
-        fullMark: 150
+        fullMark: 150,
       };
     });
   }
@@ -97,6 +150,36 @@ export class StatsService {
     });
 
     return [6, 9, 12, 15, 18, 21, 0].map(h => hours[h]);
+  }
+
+  private async calculateDailyActivity() {
+    const now = new Date();
+    const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const result: { hour: string; value: number }[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = new Date(now);
+      dayStart.setDate(now.getDate() - i);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayStart.getDate() + 1);
+
+      const agg = await this.userModel.aggregate([
+        { $unwind: '$completedLessons' },
+        {
+          $match: {
+            'completedLessons.completedAt': { $gte: dayStart, $lt: dayEnd },
+          },
+        },
+        { $group: { _id: null, count: { $sum: 1 } } },
+      ]);
+
+      result.push({
+        hour: dayLabels[dayStart.getDay()],
+        value: agg[0]?.count || 0,
+      });
+    }
+    return result;
   }
 
   async getDashboardStats(period: string = '7 NGÀY') {

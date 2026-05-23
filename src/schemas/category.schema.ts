@@ -1,39 +1,39 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type CategoryDocument = Category & Document;
 
 @Schema({ timestamps: true })
 export class Category {
   @Prop({ required: true })
-  name: string; // Tên chủ đề: Ca dao, Truyện Kiều, Lễ hội...
+  name!: string; // Tên chủ đề: Ca dao, Truyện Kiều, Lễ hội...
 
   @Prop({ default: 'Toán học' })
-  subject: string; // Toán học, Ngữ văn, Lịch sử, Địa lý...
+  subject!: string; // Toán học, Ngữ văn, Lịch sử, Địa lý...
 
   @Prop()
-  description: string;
+  description!: string;
 
   @Prop()
-  imageUrl: string; // Ảnh đại diện cho chủ đề
+  imageUrl!: string; // Ảnh đại diện cho chủ đề
 
   @Prop({ default: false })
-  isFeatured: boolean; // Có hiển thị ở phần "Nổi bật" trên App hay không
+  isFeatured!: boolean; // Có hiển thị ở phần "Nổi bật" trên App hay không
 
   @Prop({ default: 0 })
-  order: number; // Thứ tự hiển thị
+  order!: number; // Thứ tự hiển thị
 
-  @Prop({ type: [{ type: 'ObjectId', ref: 'Class' }], default: [] })
-  targetClassIds: any[];
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Class' }], default: [] })
+  targetClassIds!: Types.ObjectId[];
 
-  @Prop({ type: 'ObjectId', ref: 'User' })
-  creatorId: any;
-
-  @Prop({ default: false })
-  isPublic: boolean;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  creatorId!: Types.ObjectId;
 
   @Prop({ default: false })
-  isSystem: boolean;
+  isPublic!: boolean;
+
+  @Prop({ default: false })
+  isSystem!: boolean;
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);

@@ -7,7 +7,7 @@ import { Lesson, LessonSchema } from '../schemas/lesson.schema';
 import { Achievement, AchievementSchema } from '../schemas/achievement.schema';
 import { EventsModule } from '../events/events.module';
 import { ClassesModule } from '../classes/classes.module';
-
+import { NotificationsModule } from '../notifications/notifications.module';
 import { Category, CategorySchema } from '../schemas/category.schema';
 
 @Module({
@@ -19,7 +19,8 @@ import { Category, CategorySchema } from '../schemas/category.schema';
       { name: Achievement.name, schema: AchievementSchema }
     ]),
     EventsModule,
-    forwardRef(() => ClassesModule)
+    forwardRef(() => ClassesModule),
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [UsersController],
   providers: [UsersService],

@@ -42,76 +42,62 @@ export class LessonsService {
     return lessons;
   }
 
-  async findForStudent(classIds: any[], assignedLessonIds: any[], assignedCategoryIds: any[], query?: any): Promise<Lesson[]> {
+  async findForStudent(classIds: any[], assignedLessonIds: any[], assignedCategoryIds: any[], query?: any, excludedLessonIds: any[] = []): Promise<Lesson[]> {
     const studentClassIds = (classIds || []).map(id => typeof id === 'string' ? new Types.ObjectId(id) : id);
     const assignedLsnIds = (assignedLessonIds || []).map(id => typeof id === 'string' ? new Types.ObjectId(id) : id);
     const assignedCatIds = (assignedCategoryIds || []).map(id => typeof id === 'string' ? new Types.ObjectId(id) : id);
+    const excludedIds = (excludedLessonIds || []).map(id => typeof id === 'string' ? new Types.ObjectId(id) : id);
 
     let filter: any = {};
-    
-    if (studentClassIds.length > 0) {
-      // 1. Tìm tất cả các Category được gán cho các lớp này (qua targetClassIds hoặc qua Class.assignedCategories)
-      const assignedCategories = await this.categoryModel.find({
-        $or: [
-          { targetClassIds: { $in: studentClassIds } },
-          { _id: { $in: assignedCatIds } }
-        ]
-      }).exec();
-      const categoryNames = assignedCategories.map(c => c.name);
-      const categoryIds = assignedCategories.map(c => c._id);
 
-      // 2. CHỈ hiện bài của lớp mình + bài được giao riêng
+    if (studentClassIds.length > 0) {
+      // Chỉ hiện bài của lớp mình + bài được giao riêng
       filter = {
         $or: [
           { targetClassIds: { $in: studentClassIds } },
-          { _id: { $in: assignedLsnIds } }
+          { _id: { $in: assignedLsnIds } },
         ]
       };
     } else {
-      // NẾU CHƯA VÀO LỚP: Không hiện gì (Chế độ Strict Isolation)
-      filter = { _id: { $in: [] } };
+      // Chưa vào lớp: không hiện gì
+      return [];
     }
 
-    // NẾU có query theo Category: Cho phép xem bài thuộc category đó NẾU category đó đã được giao cho lớp
+    // NẾU có query theo Category: lọc thêm theo category
     if ((query?.category && query.category !== 'Tất cả bài học' && query.category !== 'All Lessons') || query?.categoryId) {
-      const assignedCategories = await this.categoryModel.find({
-        $or: [
-          { targetClassIds: { $in: studentClassIds } },
-          { _id: { $in: assignedCatIds } }
-        ]
-      }).exec();
-      const categoryNames = assignedCategories.map(c => c.name);
-      const categoryIds = assignedCategories.map(c => c._id);
-
-      const categoryMatch: any = {};
       const categoryName = query.category?.trim();
-      const categoryRegex = new RegExp(`^${categoryName}$`, 'i');
+      const categoryRegex = categoryName ? new RegExp(`^${categoryName}$`, 'i') : null;
 
-      categoryMatch.$or = [
-        { categoryId: query.categoryId },
-        { category: { $regex: categoryRegex } },
-        { subject: { $regex: categoryRegex } },
-        { title: { $regex: categoryRegex } }
-      ];
-      
-      // Kiểm tra xem category này có nằm trong danh sách được giao không
-      const isCategoryAssigned = assignedCatIds.some(id => id.toString() === query.categoryId) || 
-                               categoryNames.some(name => name.toLowerCase() === query.category?.toLowerCase());
+      const categoryMatch: any = {
+        $or: [
+          ...(query.categoryId ? [{ categoryId: query.categoryId }] : []),
+          ...(categoryRegex ? [
+            { category: { $regex: categoryRegex } },
+            { subject: { $regex: categoryRegex } },
+          ] : []),
+        ]
+      };
 
-      if (isCategoryAssigned) {
-        // Nếu chủ đề này được giao -> Cho phép xem tất cả bài trong chủ đề này
-        filter = categoryMatch;
-      } else {
-        // Nếu chủ đề này không được giao -> Chỉ xem được những bài lẻ được giao trong chủ đề này
-        filter = {
-          $and: [filter, categoryMatch]
-        };
-      }
+      // Kết hợp filter hiện tại với category filter
+      filter = { $and: [filter, categoryMatch] };
     }
 
-    console.log('[DEBUG] findForStudent Filter:', JSON.stringify(filter, null, 2));
-    const results = await this.lessonModel.find(filter).exec();
-    console.log(`[DEBUG] findForStudent Results Count: ${results.length}`);
+    let exclusionFilter = {};
+    if (excludedIds.length > 0 && assignedLsnIds.length > 0) {
+      const effectiveExcluded = excludedIds.filter(
+        eid => !assignedLsnIds.some(aid => aid.toString() === eid.toString())
+      );
+      if (effectiveExcluded.length > 0) {
+        exclusionFilter = { _id: { $nin: effectiveExcluded } };
+      }
+    } else if (excludedIds.length > 0) {
+      exclusionFilter = { _id: { $nin: excludedIds } };
+    }
+
+    const results = await this.lessonModel.find({
+      ...filter,
+      ...exclusionFilter,
+    }).exec();
     return results;
   }
 
@@ -186,6 +172,21 @@ export class LessonsService {
 
     const cleanedData = this.cleanImageUrl(data);
     const updated = await this.lessonModel.findByIdAndUpdate(id, cleanedData, { new: true }).exec();
+
+    // Sync class.assignedLessons when targetClassIds changes
+    if (cleanedData.targetClassIds && Array.isArray(cleanedData.targetClassIds)) {
+      const ClassesModel = this.userModel.db.model('Class');
+      const newClassIds = cleanedData.targetClassIds.map((cid: any) =>
+        typeof cid === 'string' ? new Types.ObjectId(cid) : cid
+      );
+      if (newClassIds.length > 0) {
+        await ClassesModel.updateMany(
+          { _id: { $in: newClassIds } },
+          { $addToSet: { assignedLessons: updated?._id } }
+        ).exec();
+      }
+    }
+
     this.eventsGateway.emitDataChange('lessonUpdated', updated);
     return updated;
   }
@@ -205,5 +206,26 @@ export class LessonsService {
     const deleted = await this.lessonModel.findByIdAndDelete(id).exec();
     this.eventsGateway.emitDataChange('lessonUpdated', { id, deleted: true });
     return deleted;
+  }
+
+  async syncAllLessonsToClasses(): Promise<{ synced: number }> {
+    const ClassesModel = this.userModel.db.model('Class');
+    const lessons = await this.lessonModel
+      .find({ targetClassIds: { $exists: true, $not: { $size: 0 } } })
+      .select('_id targetClassIds')
+      .lean()
+      .exec();
+
+    let synced = 0;
+    for (const lesson of lessons) {
+      if (lesson.targetClassIds && lesson.targetClassIds.length > 0) {
+        await ClassesModel.updateMany(
+          { _id: { $in: lesson.targetClassIds } },
+          { $addToSet: { assignedLessons: lesson._id } }
+        ).exec();
+        synced++;
+      }
+    }
+    return { synced };
   }
 }

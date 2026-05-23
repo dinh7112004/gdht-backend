@@ -6,7 +6,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { User, UserSchema } from '../schemas/user.schema';
+import { PasswordReset, PasswordResetSchema } from './password-reset.schema';
+import { EmailOtp, EmailOtpSchema } from './email-otp.schema';
+import { PasswordResetService } from './password-reset.service';
+import { PasswordResetController } from './password-reset.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -19,10 +24,15 @@ import { JwtStrategy } from './jwt.strategy';
         signOptions: { expiresIn: '7d' },
       }),
     }),
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: PasswordReset.name, schema: PasswordResetSchema },
+      { name: EmailOtp.name, schema: EmailOtpSchema },
+    ]),
+    UsersModule,
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  controllers: [AuthController, PasswordResetController],
+  providers: [AuthService, JwtStrategy, PasswordResetService],
   exports: [AuthService],
 })
 export class AuthModule {}

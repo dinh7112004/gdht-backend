@@ -126,6 +126,11 @@ export class UsersController {
   async resetAllStudents() {
     return this.usersService.resetAllStudentsProgress();
   }
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
+
   @Get('360/:id')
   async getStudent360(@Param('id') id: string) {
     const student360 = await this.usersService.getStudent360(id);
@@ -133,20 +138,23 @@ export class UsersController {
 
     // Fetch class info
     const classes = await this.classesService.findByStudent(id);
-    const className = classes && classes.length > 0 ? classes[0].name : "Chưa vào lớp học";
+    const className =
+      classes && classes.length > 0 ? classes[0].name : 'Chưa vào lớp học';
 
     return {
       ...student360,
       user: {
         ...student360.user,
-        className
-      }
+        className,
+      },
     };
   }
 
   @Post('toggle-save/:postId')
   @UseGuards(AuthGuard('jwt'))
-  async toggleSave(@Param('postId') postId: string, @Request() req) {
-    return this.usersService.toggleSavedPost(req.user.userId || req.user.id, postId);
+  async toggleSave(@Param('postId') postId: string, @Request() req: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    const userId: string = req.user?.userId || req.user?.id;
+    return this.usersService.toggleSavedPost(userId, postId);
   }
 }
